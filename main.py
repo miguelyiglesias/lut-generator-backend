@@ -1,14 +1,18 @@
-# main.py
 import numpy as np
 import cv2
 import os
 from sklearn.cluster import KMeans
 from fastapi import FastAPI, UploadFile, File
-from fastapi.responses import FileResponse
+from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import shutil
 
 app = FastAPI()
 
+# Montar carpeta pública para servir archivos
+app.mount("/static", StaticFiles(directory="/mnt/data"), name="static")
+
+# Funciones auxiliares
 def extract_color_profile(image_path: str, num_clusters: int = 5):
     image = cv2.imread(image_path)
     image = cv2.cvtColor(image, cv2.COLOR_BGR2RGB)
@@ -38,7 +42,7 @@ def save_lut_as_cube(lut, filename="generated_lut.cube"):
     path = f"/mnt/data/{filename}"
     with open(path, "w") as f:
         f.write("TITLE \"Generated LUT\"\n")
-        f.wrie(f"LUT_3D_SIZE {lut.shape[0]}\n")
+        f.write(f"LUT_3D_SIZE {lut.shape[0]}\n")
         f.write("DOMAIN_MIN 0.0 0.0 0.0\n")
         f.write("DOMAIN_MAX 1.0 1.0 1.0\n")
         for b in range(lut.shape[0]):
@@ -66,5 +70,7 @@ async def generate_lut_from_images(
     average_palette = average_color_profiles(color_profiles)
     lut = generate_lut(average_palette)
     lut_path = save_lut_as_cube(lut)
-    
-    return FileResponse(path=lut_path, filename="generated_lut.cube", media_type="application/octet-stream")
+
+    # Crear URL pública del archivo
+    download_url = f"https://lut-generator-backend.onrender.com/static/{os.path.basename(lut_path)}"
+    return JSONResponse(content={"download_url": download_url})
