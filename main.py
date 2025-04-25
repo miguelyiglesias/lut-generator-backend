@@ -7,14 +7,15 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 import shutil
 
-# Inicializar FastAPI
 app = FastAPI()
 
-# Crear carpeta si no existe (para evitar errores)
-os.makedirs("/mnt/data", exist_ok=True)
+# Crear carpeta local segura
+LOCAL_DATA_DIR = "./generated_files"
+os.makedirs(LOCAL_DATA_DIR, exist_ok=True)
+os.makedirs(os.path.join(LOCAL_DATA_DIR, "uploads"), exist_ok=True)
 
-# Montar carpeta pública para servir archivos .cube
-app.mount("/static", StaticFiles(directory="/mnt/data"), name="static")
+# Montar carpeta pública para servir archivos
+app.mount("/static", StaticFiles(directory=LOCAL_DATA_DIR), name="static")
 
 # Funciones auxiliares
 def extract_color_profile(image_path: str, num_clusters: int = 5):
@@ -43,7 +44,7 @@ def generate_lut(reference_colors, lut_size=33):
     return lut
 
 def save_lut_as_cube(lut, filename="generated_lut.cube"):
-    path = f"/mnt/data/{filename}"
+    path = os.path.join(LOCAL_DATA_DIR, filename)
     with open(path, "w") as f:
         f.write("TITLE \"Generated LUT\"\n")
         f.write(f"LUT_3D_SIZE {lut.shape[0]}\n")
@@ -56,17 +57,16 @@ def save_lut_as_cube(lut, filename="generated_lut.cube"):
                     f.write(f"{rgb[0]:.6f} {rgb[1]:.6f} {rgb[2]:.6f}\n")
     return path
 
-# Ruta principal que genera el LUT
 @app.post("/generate-lut/")
 async def generate_lut_from_images(
     image1: UploadFile = File(...),
     image2: UploadFile = File(...),
     image3: UploadFile = File(...)
 ):
-    os.makedirs("/mnt/data/uploads", exist_ok=True)
+    upload_dir = os.path.join(LOCAL_DATA_DIR, "uploads")
     paths = []
     for idx, image in enumerate([image1, image2, image3]):
-        path = f"/mnt/data/uploads/image_{idx}.jpg"
+        path = os.path.join(upload_dir, f"image_{idx}.jpg")
         with open(path, "wb") as buffer:
             shutil.copyfileobj(image.file, buffer)
         paths.append(path)
@@ -76,6 +76,5 @@ async def generate_lut_from_images(
     lut = generate_lut(average_palette)
     lut_path = save_lut_as_cube(lut)
 
-    # Generar URL pública para descarga
     download_url = f"https://lut-generator-backend.onrender.com/static/{os.path.basename(lut_path)}"
     return JSONResponse(content={"download_url": download_url})
