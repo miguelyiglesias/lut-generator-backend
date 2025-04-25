@@ -3,3 +3,4 @@ uvicorn
 opencv-python-headless
 scikit-learn
 numpy
+python-multipart
